@@ -1,0 +1,103 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/@generated/prisma-client"
+  moduleFormat = "commonjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Pre-existing models for context (already implemented)
+model User {
+  id                       String                     @id @default(cuid())
+  email                    String                     @unique
+  companyId                String
+  company                  Company                    @relation(fields: [companyId], references: [id])
+  featureUsageEvents       FeatureUsageEvent[]
+  dailyUserFeatureActivity DailyUserFeatureActivity[]
+  createdAt                DateTime                   @default(now())
+}
+
+model Company {
+  id                       String                     @id @default(cuid())
+  name                     String
+  users                    User[]
+  assistants               Assistant[]
+  featureUsageEvents       FeatureUsageEvent[]
+  dailyUserFeatureActivity DailyUserFeatureActivity[]
+  dailyActiveUserMetrics   DailyActiveUserMetric[]
+  createdAt                DateTime                   @default(now())
+}
+
+model Assistant {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([createdBy])
+}
+
+// ============================================================================
+// TODO: Implement the metrics models below
+// ============================================================================
+model FeatureUsageEvent {
+  id             String   @id @default(cuid())
+  eventId        String   @unique
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id])
+  feature        String
+  occurredAt     DateTime
+  occurredDayUtc DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([occurredDayUtc, companyId, feature])
+  @@index([companyId, feature, occurredAt])
+}
+
+model DailyUserFeatureActivity {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id])
+  feature        String
+  activityDayUtc DateTime
+  createdAt      DateTime @default(now())
+
+  @@unique([companyId, feature, userId, activityDayUtc])
+  @@index([activityDayUtc, companyId, feature])
+}
+
+model DailyActiveUserMetric {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id])
+  feature      String
+  metricDayUtc DateTime
+  dau          Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([companyId, feature, metricDayUtc])
+  @@index([metricDayUtc, companyId, feature])
+}
+
+model MetricsAggregationCheckpoint {
+  id                   String   @id @default(cuid())
+  jobKey               String   @unique
+  lastAggregatedDayUtc DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
