@@ -6,8 +6,7 @@ import {
 } from '@nestjs/common';
 import cuid from 'cuid';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ValidatedCreateEventDto } from '../dto/validated-create-event.dto';
-import { DailyActiveUserMetricsRepository } from '../repositories/daily-active-user-metrics.repository';
+import { IngestFeatureUsageEventCommand } from '../contracts/ingest-feature-usage-event.command';
 import { DailyUserFeatureActivityRepository } from '../repositories/daily-user-feature-activity.repository';
 import { FeatureUsageEventsRepository } from '../repositories/feature-usage-events.repository';
 import { UsersRepository } from '../repositories/users.repository';
@@ -27,10 +26,9 @@ export class EventIngestionService {
     private readonly usersRepository: UsersRepository,
     private readonly featureUsageEventsRepository: FeatureUsageEventsRepository,
     private readonly dailyUserFeatureActivityRepository: DailyUserFeatureActivityRepository,
-    private readonly dailyActiveUserMetricsRepository: DailyActiveUserMetricsRepository,
   ) {}
 
-  async ingest(input: ValidatedCreateEventDto): Promise<IngestEventResult> {
+  async ingest(input: IngestFeatureUsageEventCommand): Promise<IngestEventResult> {
     const user = await this.usersRepository.findById(input.userId);
 
     if (!user) {
@@ -60,15 +58,6 @@ export class EventIngestionService {
         feature: input.feature,
         activityDayUtc: occurredDayUtc,
       });
-
-      await this.dailyActiveUserMetricsRepository.incrementMetric(tx, {
-        id: cuid(),
-        companyId: user.companyId,
-        feature: input.feature,
-        metricDayUtc: occurredDayUtc,
-        incrementBy: 1,
-      });
-
     });
 
     this.logger.log(`Stored feature usage event ${input.eventId}`);

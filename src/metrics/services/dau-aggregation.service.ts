@@ -1,17 +1,15 @@
 import { RedlockService } from '@anchan828/nest-redlock';
 import { Injectable, Logger } from '@nestjs/common';
-import cuid from 'cuid';
-import { Prisma } from '../../@generated/prisma-client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { DailyActivityAggregate } from '../models/daily-activity-aggregate.model';
+import {
+  DAU_AGGREGATION_JOB_KEY,
+  DAU_AGGREGATION_LOCK_DURATION_MS,
+  DAU_AGGREGATION_LOCK_KEY,
+} from '../constants/dau-aggregation.constants';
 import { DailyActiveUserMetricsRepository } from '../repositories/daily-active-user-metrics.repository';
 import { DailyUserFeatureActivityRepository } from '../repositories/daily-user-feature-activity.repository';
 import { MetricsAggregationCheckpointsRepository } from '../repositories/metrics-aggregation-checkpoints.repository';
 import { addUtcDays, startOfUtcDay, toUtcDateString } from '../utils/utc-date.util';
-
-const DAU_AGGREGATION_JOB_KEY = 'dau:v1';
-const DAU_AGGREGATION_LOCK_KEY = 'metrics:dau:v1';
-const DAU_AGGREGATION_LOCK_DURATION_MS = 60_000;
 
 export interface DauAggregationRunResult {
   processedDays: number;
@@ -77,13 +75,11 @@ export class DauAggregationService {
   }
 
   private async aggregateDay(activityDayUtc: Date): Promise<void> {
-    const aggregates =
-      await this.dailyUserFeatureActivityRepository.groupByDay(activityDayUtc);
-
     await this.prisma.$transaction(async (tx) => {
-      for (const aggregate of aggregates) {
-        await this.writeAggregate(tx, aggregate);
-      }
+      await this.dailyActiveUserMetricsRepository.upsertMetricsForDay(
+        tx,
+        activityDayUtc,
+      );
 
       await this.metricsAggregationCheckpointsRepository.upsertLastAggregatedDay(
         tx,
@@ -93,20 +89,7 @@ export class DauAggregationService {
     });
 
     this.logger.log(
-      `Aggregated ${aggregates.length} DAU buckets for ${toUtcDateString(activityDayUtc)}`,
+      `Aggregated DAU buckets for ${toUtcDateString(activityDayUtc)}`,
     );
-  }
-
-  private async writeAggregate(
-    tx: Prisma.TransactionClient,
-    aggregate: DailyActivityAggregate,
-  ): Promise<void> {
-    await this.dailyActiveUserMetricsRepository.upsertMetric(tx, {
-      id: cuid(),
-      companyId: aggregate.companyId,
-      feature: aggregate.feature,
-      metricDayUtc: aggregate.activityDayUtc,
-      dau: aggregate.dau,
-    });
   }
 }

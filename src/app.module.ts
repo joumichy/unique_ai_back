@@ -8,7 +8,6 @@ import Redis from "ioredis";
 import { LoggerModule } from "nestjs-pino";
 import { join } from "node:path";
 import { AppSettings } from "./app.settings";
-import { AssistantModule } from "./assistant/assistant.module";
 import { MetricsModule } from "./metrics/metrics.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
@@ -16,7 +15,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 	imports: [
 		ConfigModule.forRoot({
 			isGlobal: true,
-			envFilePath: [".env"],
+			envFilePath: [".env.local", ".env"],
 		}),
 		LoggerModule.forRoot({
 			pinoHttp: {
@@ -31,16 +30,24 @@ import { PrismaModule } from "./prisma/prisma.module";
 			},
 		}),
 		ScheduleModule.forRoot(),
-		GraphQLModule.forRoot<ApolloDriverConfig>({
+		GraphQLModule.forRootAsync<ApolloDriverConfig>({
 			driver: ApolloDriver,
-			autoSchemaFile: join(process.cwd(), "src/@generated/schema.graphql"),
-			introspection: true,
-			playground: true,
-			sortSchema: true,
-			cache: "bounded",
-		}),
+			inject: [ConfigService],
+			useFactory: async (config: ConfigService) => {
+				const isProduction =
+					config.get<string>(AppSettings.NODE_ENV) === "production";
 
-		// Redlock for distributed locking
+				return {
+					autoSchemaFile: join(process.cwd(), "src/@generated/schema.graphql"),
+					introspection: !isProduction,
+					playground: !isProduction,
+					sortSchema: true,
+					cache: "bounded",
+					path: "/graphql",
+					context: ({ req }) => ({ req }),
+				};
+			},
+		}),
 		RedlockModule.registerAsync({
 			isGlobal: true,
 			useFactory: async (config: ConfigService) => {
@@ -53,7 +60,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 				const redis = new Redis(redisConfig);
 				try {
 					await redis.ping();
-				} catch (error) {
+				} catch {
 					throw new Error(
 						`Cannot connect to redis ${redisConfig.host}:${redisConfig.port}`,
 					);
@@ -72,10 +79,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 			},
 			inject: [ConfigService],
 		}),
-
-		// Application modules
 		PrismaModule,
-		AssistantModule,
 		MetricsModule,
 	],
 })

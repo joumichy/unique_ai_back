@@ -8,7 +8,6 @@ export class DauAggregationScheduler {
 
   constructor(private readonly dauAggregationService: DauAggregationService) {}
 
-  //Its configured to run every 2 minutes but you can change it to whatever you want.
   @Cron('*/2 * * * *')
   async handleCron(): Promise<void> {
     this.logger.log('DAU aggregation cron triggered');

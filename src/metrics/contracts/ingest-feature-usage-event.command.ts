@@ -1,4 +1,4 @@
-export interface ValidatedCreateEventDto {
+export interface IngestFeatureUsageEventCommand {
   eventId: string;
   userId: string;
   feature: string;

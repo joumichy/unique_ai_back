@@ -1,4 +1,3 @@
-import { DailyActivityAggregate } from '../models/daily-activity-aggregate.model';
 import { DauAggregationService } from './dau-aggregation.service';
 
 describe('DauAggregationService', () => {
@@ -9,9 +8,8 @@ describe('DauAggregationService', () => {
   let redlock: { using: jest.Mock };
   let dailyUserFeatureActivityRepository: {
     findEarliestActivityDay: jest.Mock;
-    groupByDay: jest.Mock;
   };
-  let dailyActiveUserMetricsRepository: { upsertMetric: jest.Mock };
+  let dailyActiveUserMetricsRepository: { upsertMetricsForDay: jest.Mock };
   let metricsAggregationCheckpointsRepository: {
     findByJobKey: jest.Mock;
     upsertLastAggregatedDay: jest.Mock;
@@ -28,10 +26,9 @@ describe('DauAggregationService', () => {
     };
     dailyUserFeatureActivityRepository = {
       findEarliestActivityDay: jest.fn(),
-      groupByDay: jest.fn(),
     };
     dailyActiveUserMetricsRepository = {
-      upsertMetric: jest.fn(),
+      upsertMetricsForDay: jest.fn(),
     };
     metricsAggregationCheckpointsRepository = {
       findByJobKey: jest.fn(),
@@ -47,24 +44,13 @@ describe('DauAggregationService', () => {
     );
   });
 
-  it('aggregates completed days and advances the checkpoint (expected: lock used, metrics upserted, checkpoint moved)', async () => {
+  it('aggregates completed days and advances the checkpoint (expected: lock used, bulk aggregation run and checkpoint moved)', async () => {
     const dayOne = new Date('2026-03-14T00:00:00.000Z');
     const dayTwo = new Date('2026-03-15T00:00:00.000Z');
-    const aggregates: DailyActivityAggregate[] = [
-      {
-        companyId: 'company_1',
-        feature: 'chat_send_message',
-        activityDayUtc: dayOne,
-        dau: 3,
-      },
-    ];
 
     metricsAggregationCheckpointsRepository.findByJobKey.mockResolvedValue(null);
     dailyUserFeatureActivityRepository.findEarliestActivityDay.mockResolvedValue(dayOne);
-    dailyUserFeatureActivityRepository.groupByDay
-      .mockResolvedValueOnce(aggregates)
-      .mockResolvedValueOnce([]);
-    dailyActiveUserMetricsRepository.upsertMetric.mockResolvedValue({} as never);
+    dailyActiveUserMetricsRepository.upsertMetricsForDay.mockResolvedValue(1);
     metricsAggregationCheckpointsRepository.upsertLastAggregatedDay.mockResolvedValue(
       {} as never,
     );
@@ -80,22 +66,15 @@ describe('DauAggregationService', () => {
       processedDays: 2,
       lastAggregatedDayUtc: '2026-03-15',
     });
-    expect(dailyUserFeatureActivityRepository.groupByDay).toHaveBeenNthCalledWith(
+    expect(dailyActiveUserMetricsRepository.upsertMetricsForDay).toHaveBeenNthCalledWith(
       1,
+      transactionClient,
       dayOne,
     );
-    expect(dailyUserFeatureActivityRepository.groupByDay).toHaveBeenNthCalledWith(
+    expect(dailyActiveUserMetricsRepository.upsertMetricsForDay).toHaveBeenNthCalledWith(
       2,
-      dayTwo,
-    );
-    expect(dailyActiveUserMetricsRepository.upsertMetric).toHaveBeenCalledWith(
       transactionClient,
-      expect.objectContaining({
-        companyId: 'company_1',
-        feature: 'chat_send_message',
-        metricDayUtc: dayOne,
-        dau: 3,
-      }),
+      dayTwo,
     );
     expect(
       metricsAggregationCheckpointsRepository.upsertLastAggregatedDay,
@@ -111,7 +90,7 @@ describe('DauAggregationService', () => {
     const result = await service.runOnce(new Date('2026-03-16T12:00:00.000Z'));
 
     expect(result).toEqual({ processedDays: 0 });
-    expect(dailyUserFeatureActivityRepository.groupByDay).not.toHaveBeenCalled();
+    expect(dailyActiveUserMetricsRepository.upsertMetricsForDay).not.toHaveBeenCalled();
   });
 
   it('does not advance the checkpoint when aggregation fails (expected: error thrown and checkpoint unchanged)', async () => {
@@ -119,15 +98,9 @@ describe('DauAggregationService', () => {
 
     metricsAggregationCheckpointsRepository.findByJobKey.mockResolvedValue(null);
     dailyUserFeatureActivityRepository.findEarliestActivityDay.mockResolvedValue(dayOne);
-    dailyUserFeatureActivityRepository.groupByDay.mockResolvedValue([
-      {
-        companyId: 'company_1',
-        feature: 'chat_send_message',
-        activityDayUtc: dayOne,
-        dau: 2,
-      },
-    ]);
-    dailyActiveUserMetricsRepository.upsertMetric.mockRejectedValue(new Error('boom'));
+    dailyActiveUserMetricsRepository.upsertMetricsForDay.mockRejectedValue(
+      new Error('boom'),
+    );
 
     await expect(
       service.runOnce(new Date('2026-03-16T12:00:00.000Z')),
