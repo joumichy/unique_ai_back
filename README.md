@@ -10,19 +10,31 @@ Author: John ALLOU
 
 ## Run Locally
 
-Use a dedicated local env file to avoid conflicts with system-level variables:
+Create `.env` from `.env.example`, then run:
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS / Linux:
 
 ```bash
-npm run prisma:migrate:local
-npm run prisma:generate:local
-npm run prisma:seed:local
-npm run start:dev:local
+cp .env.example .env
+```
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+npm run prisma:seed
+npm run start:dev
 ```
 
 Notes:
 
-- `.env.local` is loaded with higher priority than `.env`.
-- `.env.local` is gitignored and intended for machine-specific values.
+- The application reads `.env`.
+- `.env` is intended to be created by the user from `.env.example`.
 
 ## Run with Docker
 
