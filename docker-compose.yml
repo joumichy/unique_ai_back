@@ -1,6 +1,20 @@
+x-app-image: &app-image
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      DATABASE_URL: ${DATABASE_URL}
+  env_file:
+    - .env
+
+x-app-db-env: &app-db-env
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  NODE_ENV: ${NODE_ENV:-development}
+
 services:
   postgres:
     image: postgres:16
+    restart: unless-stopped
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     environment:
@@ -17,6 +31,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:
@@ -25,31 +40,33 @@ services:
       timeout: 5s
       retries: 5
 
+  app-init:
+    <<: *app-image
+    environment:
+      <<: *app-db-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npm", "run", "docker:init"]
+    restart: "no"
+
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        DATABASE_URL: ${DATABASE_URL}
-    env_file:
-      - .env
+    <<: *app-image
+    restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      REDIS_HOST: redis
-      REDIS_PORT: ${REDIS_PORT}
-      NODE_ENV: ${NODE_ENV}
-      PORT: ${PORT}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command:
-      - sh
-      - -c
-      - npx prisma generate && npx prisma migrate deploy && npx tsx prisma/seed.ts && npm run start:prod
+      app-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-db-env
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      PORT: ${PORT:-3000}
 
 volumes:
   postgres_data:

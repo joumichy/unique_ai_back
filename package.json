@@ -14,6 +14,7 @@
     "start:dev:local": "dotenv -e ./.env.local -- nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "docker:init": "npm run prisma:migrate:deploy && npm run prisma:seed:docker",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest --runInBand --detectOpenHandles",
     "test:watch": "jest --watch",
@@ -23,8 +24,10 @@
     "prisma:generate:local": "dotenv -e ./.env.local -- prisma generate",
     "prisma:migrate": "dotenv -e ./.env -- prisma migrate dev",
     "prisma:migrate:local": "dotenv -e ./.env.local -- prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "dotenv -e ./.env -- prisma db seed",
-    "prisma:seed:local": "dotenv -e ./.env.local -- prisma db seed"
+    "prisma:seed:local": "dotenv -e ./.env.local -- prisma db seed",
+    "prisma:seed:docker": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@anchan828/nest-redlock": "^0.4.1",

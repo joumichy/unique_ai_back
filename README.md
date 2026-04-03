@@ -54,6 +54,13 @@ Stop services:
 docker compose down
 ```
 
+Notes:
+
+- `app-init` is a one-shot bootstrap container.
+- It runs `prisma migrate deploy`, which is idempotent and only applies pending migrations.
+- It then runs the idempotent seed script so the demo users remain available on fresh databases.
+- The `app` container starts only after `app-init` completes successfully.
+
 ## Architecture Overview
 
 The backend keeps the same modular NestJS structure, but the transport layer is now GraphQL-only for metrics:
@@ -73,8 +80,8 @@ src/
     services/   -> ingestion, aggregation, validation and query logic
     repositories/ -> database access via Prisma / SQL
     scheduler/  -> cron trigger for aggregation
-    models/     -> repository/domain contracts
-    dto/        -> internal typed response contracts
+    contracts/  -> service-level commands, queries and results
+    models/     -> repository persistence shapes
 ```
 
 Recommended reading order:
